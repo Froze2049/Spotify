@@ -97,10 +97,13 @@ Console.info(`FORMAT: ${FORMAT}`);
 			if (url.pathname.startsWith("/color-lyrics/v2/track/")) {
 				const trackId = PATHs?.[3];
 				Console.debug(`trackId: ${trackId}`);
-				const _request = JSON.parse(JSON.stringify($request));
-				_request.url = `https://api.spotify.com/v1/tracks?ids=${trackId}`;
-				if (_request?.headers?.Accept) _request.headers.Accept = "application/json";
-				if (_request?.headers?.accept) _request.headers.accept = "application/json";
+				const _request = {
+					url: `https://open.spotify.com/oembed?url=https://open.spotify.com/track/${trackId}`,
+					headers: {
+						Accept: "application/json",
+						"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+					},
+				};
 				//Console.debug(`_request: ${JSON.stringify(_request)}`);
 				const detectStutus = fetch($request);
 				const detectTrack = fetch(_request);
@@ -129,22 +132,25 @@ Console.info(`FORMAT: ${FORMAT}`);
 					switch (results[1].status) {
 						case "fulfilled": {
 							const response = results[1].value;
-							body = JSON.parse(response.body);
-							body?.tracks?.forEach?.(track => {
-								const trackId = track?.id;
-								const trackInfo = {
-									id: track?.id,
-									track: track?.name,
-									album: track?.album?.name,
-									artist: track?.artists?.[0]?.name,
-								};
-								// 写入数据
-								Caches.Metadatas.Tracks.set(trackId, trackInfo);
-							});
-							// 格式化缓存
-							Caches.Metadatas.Tracks = setCache(Caches.Metadatas.Tracks, Settings.CacheSize);
-							// 写入持久化储存
-							Storage.setItem(`@DualSubs.${"Spotify"}.Caches.Metadatas.Tracks`, Caches.Metadatas.Tracks);
+							try {
+								const data = JSON.parse(response.body);
+								if (data?.title) {
+									const trackInfo = {
+										id: trackId,
+										track: data?.title,
+										album: undefined,
+										artist: data?.author_name ?? "",
+									};
+									// 写入数据
+									Caches.Metadatas.Tracks.set(trackId, trackInfo);
+									// 格式化缓存
+									Caches.Metadatas.Tracks = setCache(Caches.Metadatas.Tracks, Settings.CacheSize);
+									// 写入持久化储存
+									Storage.setItem(`@DualSubs.${"Spotify"}.Caches.Metadatas.Tracks`, Caches.Metadatas.Tracks);
+								}
+							} catch (e) {
+								Console.error("解析 oEmbed 响应失败:", e);
+							}
 							break;
 						}
 						case "rejected":
